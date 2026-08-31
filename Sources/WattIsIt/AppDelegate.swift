@@ -23,6 +23,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
+    private enum AutomaticUpdateMode: String, CaseIterable {
+        case daily
+        case off
+
+        static let defaultsKey = "automaticUpdateMode"
+
+        var title: String {
+            switch self {
+            case .daily: return "Daily at midnight UTC"
+            case .off: return "Off"
+            }
+        }
+    }
+
     private var statusItem: NSStatusItem?
     private var statusMenu: NSMenu!
     private var displaySubmenu: NSMenu!
@@ -31,7 +45,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var chargeSurplusItem: NSMenuItem!
     private var ratedInputItem: NSMenuItem!
     private var displayItems: [DisplayValue: NSMenuItem] = [:]
+    private var automaticUpdateModeItems: [AutomaticUpdateMode: NSMenuItem] = [:]
     private var refreshTimer: Timer?
+    private var automaticUpdateTimer: Timer?
     private var powerSourceRunLoopSource: CFRunLoopSource?
     private var updateTask: Task<Void, Never>?
     private var updateStatusItem: NSStatusItem?
@@ -44,14 +60,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private let lastUpdateCheckKey = "lastUpdateCheckDate"
     private let pendingUpdateVersionKey = "pendingUpdateVersion"
-    private let automaticUpdateCheckInterval: TimeInterval = 7 * 24 * 60 * 60
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         UserDefaults.standard.register(defaults: [
             DisplayValue.actualInput.defaultsKey: true,
             DisplayValue.systemDraw.defaultsKey: false,
             DisplayValue.chargeSurplus.defaultsKey: false,
-            DisplayValue.ratedInput.defaultsKey: false
+            DisplayValue.ratedInput.defaultsKey: false,
+            AutomaticUpdateMode.defaultsKey: AutomaticUpdateMode.daily.rawValue
         ])
 
         NSApp.setActivationPolicy(.accessory)
@@ -60,12 +76,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         configureUpdateIndicator()
         showUpdateSuccessIfNeeded()
         refresh()
-        checkForUpdatesIfNeeded()
+        configureAutomaticUpdateChecking()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
         stopPolling()
         stopPowerSourceNotifications()
+        automaticUpdateTimer?.invalidate()
         updateTask?.cancel()
         successMessageTimer?.invalidate()
         updateSpinner?.stopAnimation(nil)
@@ -211,6 +228,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         updateItem.target = self
         statusMenu.addItem(updateItem)
 
+        let automaticUpdatesItem = NSMenuItem(
+            title: "Automatic update checks",
+            action: nil,
+            keyEquivalent: ""
+        )
+        automaticUpdatesItem.submenu = makeAutomaticUpdateSubmenu()
+        statusMenu.addItem(automaticUpdatesItem)
+
         let changelogItem = NSMenuItem(title: "Changelog", action: nil, keyEquivalent: "")
         changelogItem.submenu = makeChangelogSubmenu()
         statusMenu.addItem(changelogItem)
@@ -232,11 +257,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         quitItem.target = self
         statusMenu.addItem(quitItem)
         updateDisplayMenu()
+        updateAutomaticUpdateMenu()
+    }
+
+    private func makeAutomaticUpdateSubmenu() -> NSMenu {
+        let menu = NSMenu(title: "Automatic update checks")
+        for mode in AutomaticUpdateMode.allCases {
+            let item = NSMenuItem(
+                title: mode.title,
+                action: #selector(selectAutomaticUpdateMode(_:)),
+                keyEquivalent: ""
+            )
+            item.target = self
+            item.representedObject = mode.rawValue
+            automaticUpdateModeItems[mode] = item
+            menu.addItem(item)
+        }
+        return menu
     }
 
     private func makeChangelogSubmenu() -> NSMenu {
         let menu = NSMenu(title: "Changelog")
         let entries: [(String, [String])] = [
+            (
+                "1.1.4",
+                [
+                    "Automatic release checks now run once a day at midnight UTC by default.",
+                    "Adds an option to turn automatic checks off while keeping manual checks available."
+                ]
+            ),
             (
                 "1.1.3",
                 [
@@ -360,6 +409,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         refresh()
         updateStatusMenu()
         updateDisplayMenu()
+        updateAutomaticUpdateMenu()
     }
 
     @objc private func toggleDisplayValue(_ sender: NSMenuItem) {
@@ -376,6 +426,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
         updateDisplayMenu()
         renderStatusItem()
+    }
+
+    @objc private func selectAutomaticUpdateMode(_ sender: NSMenuItem) {
+        guard
+            let rawValue = sender.representedObject as? String,
+            let mode = AutomaticUpdateMode(rawValue: rawValue)
+        else {
+            return
+        }
+
+        UserDefaults.standard.set(mode.rawValue, forKey: AutomaticUpdateMode.defaultsKey)
+        updateAutomaticUpdateMenu()
+        configureAutomaticUpdateChecking()
     }
 
     private func renderStatusItem() {
@@ -437,14 +500,76 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         checkForUpdates(manual: true)
     }
 
-    private func checkForUpdatesIfNeeded() {
-        guard
-            let lastCheck = UserDefaults.standard.object(forKey: lastUpdateCheckKey) as? Date,
-            Date().timeIntervalSince(lastCheck) < automaticUpdateCheckInterval
-        else {
-            checkForUpdates(manual: false)
+    private var automaticUpdateMode: AutomaticUpdateMode {
+        AutomaticUpdateMode(
+            rawValue: UserDefaults.standard.string(forKey: AutomaticUpdateMode.defaultsKey) ?? ""
+        ) ?? .daily
+    }
+
+    private var utcCalendar: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        return calendar
+    }
+
+    private func updateAutomaticUpdateMenu() {
+        let selectedMode = automaticUpdateMode
+        for mode in AutomaticUpdateMode.allCases {
+            automaticUpdateModeItems[mode]?.state = mode == selectedMode ? .on : .off
+        }
+    }
+
+    private func configureAutomaticUpdateChecking() {
+        automaticUpdateTimer?.invalidate()
+        automaticUpdateTimer = nil
+
+        guard automaticUpdateMode == .daily else {
             return
         }
+
+        // Check once on launch if today's UTC check has not happened yet,
+        // then schedule the next check precisely for the following midnight.
+        if shouldCheckForCurrentUTCDay() {
+            checkForUpdates(manual: false)
+        }
+        scheduleNextAutomaticUpdateCheck()
+    }
+
+    private func shouldCheckForCurrentUTCDay() -> Bool {
+        guard let lastCheck = UserDefaults.standard.object(forKey: lastUpdateCheckKey) as? Date else {
+            return true
+        }
+        return !utcCalendar.isDate(lastCheck, inSameDayAs: Date())
+    }
+
+    private func scheduleNextAutomaticUpdateCheck() {
+        let calendar = utcCalendar
+        let startOfToday = calendar.startOfDay(for: Date())
+        let nextMidnight = calendar.date(
+            byAdding: .day,
+            value: 1,
+            to: startOfToday
+        ) ?? Date().addingTimeInterval(24 * 60 * 60)
+        let interval = max(1, nextMidnight.timeIntervalSinceNow)
+
+        automaticUpdateTimer = Timer.scheduledTimer(
+            timeInterval: interval,
+            target: self,
+            selector: #selector(automaticUpdateTimerFired),
+            userInfo: nil,
+            repeats: false
+        )
+        automaticUpdateTimer?.tolerance = 1.0
+    }
+
+    @objc private func automaticUpdateTimerFired() {
+        automaticUpdateTimer = nil
+        guard automaticUpdateMode == .daily else {
+            return
+        }
+
+        checkForUpdates(manual: false)
+        scheduleNextAutomaticUpdateCheck()
     }
 
     private func checkForUpdates(manual: Bool) {
