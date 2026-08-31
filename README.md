@@ -19,7 +19,7 @@
 
 ## Download
 
-[Download Watt is it? for Apple silicon](https://github.com/shay2000/watt-is-it/releases/latest/download/WattIsIt-1.1.4-macOS-arm64.dmg)
+[Download Watt is it? for Apple silicon](https://github.com/shay2000/watt-is-it/releases/latest/download/WattIsIt-1.1.5-macOS-arm64.dmg)
 
 ## Quick start
 
@@ -38,7 +38,7 @@ Watt is it? runs as a lightweight menu-bar app with no Dock window. It becomes v
 </p>
 
 <p align="center">
-  <em>Example menu view with selectable wattage values. Current releases also include the Automatic update checks submenu.</em>
+  <em>Example menu view with selectable wattage values and the Automatic update checks option.</em>
 </p>
 
 ## Features
@@ -52,7 +52,7 @@ Watt is it? runs as a lightweight menu-bar app with no Dock window. It becomes v
 - Polling pauses completely on battery and resumes when macOS reports a power-source change.
 - Built-in GitHub release updater with a native **Check for Updates…** menu item.
 - Configurable automatic update checks, set to daily at midnight UTC by default or turned off.
-- Animated update spinner appears to the left of the watt readout during downloads and installation.
+- Animated update spinner appears inside the watt status item, to the left of the watt readout during downloads and installation.
 - No telemetry or account; the only network request is the GitHub release check.
 
 ## Using the menu
@@ -77,6 +77,11 @@ The scheduler targets the next midnight in UTC. If the Mac is asleep or the app 
 During download and installation, an animated spinner appears to the left of the watt readout. The updater accepts only the app's Apple silicon DMG, checks its bundle identity and code signature, then relaunches Watt is it? from Applications. Open the installed app from Applications before using in-app updates; updates cannot replace an app running directly from a mounted DMG.
 
 ## Changelog
+
+### 1.1.5
+
+- Keeps the update spinner inside the existing wattage status item instead of creating a second menu-bar icon.
+- Updates the README example image to the current menu layout.
 
 ### 1.1.4
 

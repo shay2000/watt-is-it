@@ -50,7 +50,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var automaticUpdateTimer: Timer?
     private var powerSourceRunLoopSource: CFRunLoopSource?
     private var updateTask: Task<Void, Never>?
-    private var updateStatusItem: NSStatusItem?
     private var updateSpinner: NSProgressIndicator?
     private var isUpdateActive = false
     private var successMessageTimer: Timer?
@@ -73,7 +72,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         NSApp.setActivationPolicy(.accessory)
         configureStatusMenu()
         configurePowerSourceNotifications()
-        configureUpdateIndicator()
         showUpdateSuccessIfNeeded()
         refresh()
         configureAutomaticUpdateChecking()
@@ -88,9 +86,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         updateSpinner?.stopAnimation(nil)
         if let statusItem {
             NSStatusBar.system.removeStatusItem(statusItem)
-        }
-        if let updateStatusItem {
-            NSStatusBar.system.removeStatusItem(updateStatusItem)
         }
     }
 
@@ -136,53 +131,49 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         refresh()
     }
 
-    private func configureUpdateIndicator() {
-        guard updateStatusItem == nil else {
+    private func configureUpdateIndicator(on button: NSStatusBarButton) {
+        guard updateSpinner == nil else {
             return
         }
 
-        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        let container = NSView(
-            frame: NSRect(
-                x: 0,
-                y: 0,
-                width: NSStatusItem.squareLength,
-                height: NSStatusItem.squareLength
-            )
-        )
-        container.toolTip = "Watt is it? — updating"
-
-        let spinner = NSProgressIndicator(frame: container.bounds.insetBy(dx: 2, dy: 2))
-        spinner.autoresizingMask = [.width, .height]
+        // Keep the progress indicator inside the one and only status item.
+        // The leading spaces reserved in renderStatusItem keep it clear of
+        // the wattage text while preserving the native status-button menu.
+        let spinner = NSProgressIndicator(frame: .zero)
+        spinner.translatesAutoresizingMaskIntoConstraints = false
         spinner.style = .spinning
         spinner.controlSize = .small
         spinner.isIndeterminate = true
         spinner.isDisplayedWhenStopped = false
-        container.addSubview(spinner)
-
-        item.view = container
-        item.isVisible = false
-        updateStatusItem = item
+        spinner.isHidden = true
+        button.addSubview(spinner)
+        NSLayoutConstraint.activate([
+            spinner.leadingAnchor.constraint(equalTo: button.leadingAnchor, constant: 2),
+            spinner.centerYAnchor.constraint(equalTo: button.centerYAnchor),
+            spinner.widthAnchor.constraint(equalToConstant: 12),
+            spinner.heightAnchor.constraint(equalToConstant: 12)
+        ])
         updateSpinner = spinner
     }
 
     private func updateIndicatorVisibility() {
-        guard let updateStatusItem else {
+        guard let updateSpinner else {
             return
         }
 
         let shouldShow = isUpdateActive && snapshot.externalConnected && statusItem != nil
         if shouldShow {
-            updateStatusItem.isVisible = true
-            updateSpinner?.startAnimation(nil)
+            updateSpinner.isHidden = false
+            updateSpinner.startAnimation(nil)
         } else {
-            updateSpinner?.stopAnimation(nil)
-            updateStatusItem.isVisible = false
+            updateSpinner.stopAnimation(nil)
+            updateSpinner.isHidden = true
         }
     }
 
     private func setUpdateActivity(_ active: Bool) {
         isUpdateActive = active
+        renderStatusItem()
         updateIndicatorVisibility()
     }
 
@@ -280,6 +271,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let menu = NSMenu(title: "Changelog")
         let entries: [(String, [String])] = [
             (
+                "1.1.5",
+                [
+                    "Keeps the update spinner inside the existing wattage status item.",
+                    "Avoids creating a second menu-bar icon while an update is active."
+                ]
+            ),
+            (
                 "1.1.4",
                 [
                     "Automatic release checks now run once a day at midnight UTC by default.",
@@ -354,12 +352,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         button.font = NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium)
         button.toolTip = "Watt is it? — actual input"
+        configureUpdateIndicator(on: button)
     }
 
     private func removeStatusItemIfNeeded() {
         guard let statusItem else {
             return
         }
+        updateSpinner?.removeFromSuperview()
+        updateSpinner = nil
         NSStatusBar.system.removeStatusItem(statusItem)
         self.statusItem = nil
     }
@@ -455,7 +456,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         // The status item is intentionally numbers-only. If every optional
         // value is unchecked, retain actual input as the safe fallback.
-        button.title = values.isEmpty ? wattageText(snapshot.powerWatts) : values.joined(separator: "  ")
+        let title = values.isEmpty ? wattageText(snapshot.powerWatts) : values.joined(separator: "  ")
+        button.title = isUpdateActive ? "    \(title)" : title
         button.image = nil
     }
 
