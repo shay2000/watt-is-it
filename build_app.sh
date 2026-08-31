@@ -30,6 +30,7 @@ mkdir -p "$MODULE_CACHE_DIR"
     "$ROOT_DIR/Sources/WattIsIt/AppDelegate.swift" \
     "$ROOT_DIR/Sources/WattIsIt/PowerReader.swift" \
     "$ROOT_DIR/Sources/WattIsIt/PowerSnapshot.swift" \
+    "$ROOT_DIR/Sources/WattIsIt/UpdateService.swift" \
     -o "$BUILD_DIR/$PRODUCT_NAME"
 
 rm -rf "$APP_DIR"

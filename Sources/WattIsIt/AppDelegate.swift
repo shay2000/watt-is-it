@@ -1,4 +1,5 @@
 import AppKit
+import IOKit.ps
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
@@ -31,7 +32,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var ratedInputItem: NSMenuItem!
     private var displayItems: [DisplayValue: NSMenuItem] = [:]
     private var refreshTimer: Timer?
+    private var powerSourceRunLoopSource: CFRunLoopSource?
+    private var updateTask: Task<Void, Never>?
     private var snapshot = PowerSnapshot.unavailable
+
+    private let lastUpdateCheckKey = "lastUpdateCheckDate"
+    private let automaticUpdateCheckInterval: TimeInterval = 24 * 60 * 60
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         UserDefaults.standard.register(defaults: [
@@ -43,23 +49,60 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         NSApp.setActivationPolicy(.accessory)
         configureStatusMenu()
+        configurePowerSourceNotifications()
         refresh()
-
-        refreshTimer = Timer.scheduledTimer(
-            timeInterval: 1.0,
-            target: self,
-            selector: #selector(refresh),
-            userInfo: nil,
-            repeats: true
-        )
-        refreshTimer?.tolerance = 0.1
+        checkForUpdatesIfNeeded()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        refreshTimer?.invalidate()
+        stopPolling()
+        stopPowerSourceNotifications()
+        updateTask?.cancel()
         if let statusItem {
             NSStatusBar.system.removeStatusItem(statusItem)
         }
+    }
+
+    private func configurePowerSourceNotifications() {
+        guard powerSourceRunLoopSource == nil else {
+            return
+        }
+
+        let context = UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
+        let callback: IOPowerSourceCallbackType = { context in
+            guard let context else {
+                return
+            }
+
+            let delegate = Unmanaged<AppDelegate>
+                .fromOpaque(context)
+                .takeUnretainedValue()
+
+            Task { @MainActor [weak delegate] in
+                delegate?.powerSourceDidChange()
+            }
+        }
+
+        guard let source = IOPSNotificationCreateRunLoopSource(callback, context)?.takeRetainedValue() else {
+            return
+        }
+
+        powerSourceRunLoopSource = source
+        CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
+    }
+
+    private func stopPowerSourceNotifications() {
+        guard let source = powerSourceRunLoopSource else {
+            return
+        }
+
+        CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes)
+        powerSourceRunLoopSource = nil
+    }
+
+    private func powerSourceDidChange() {
+        // This is the only wake-up path after polling has stopped on battery.
+        refresh()
     }
 
     private func configureStatusMenu() {
@@ -94,6 +137,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let displayItem = NSMenuItem(title: "Show in menu bar", action: nil, keyEquivalent: "")
         displayItem.submenu = displaySubmenu
         statusMenu.addItem(displayItem)
+        statusMenu.addItem(.separator())
+
+        let updateItem = NSMenuItem(
+            title: "Check for Updates…",
+            action: #selector(checkForUpdatesManually),
+            keyEquivalent: ""
+        )
+        updateItem.target = self
+        statusMenu.addItem(updateItem)
         statusMenu.addItem(.separator())
 
         let quitItem = NSMenuItem(
@@ -139,9 +191,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func refresh() {
         snapshot = PowerReader.read()
 
-        // Keep the indicator absent until an adapter is connected. The timer
-        // remains alive so it can return as soon as the Mac is plugged in.
+        // Keep the indicator absent until an adapter is connected, and stop
+        // the timer completely on battery. The IOKit power-source callback
+        // starts polling again when macOS reports a power-source change.
         guard snapshot.externalConnected else {
+            stopPolling()
             removeStatusItemIfNeeded()
             return
         }
@@ -149,6 +203,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         installStatusItemIfNeeded()
         renderStatusItem()
         updateStatusMenu()
+        startPollingIfNeeded()
+    }
+
+    private func startPollingIfNeeded() {
+        guard refreshTimer == nil else {
+            return
+        }
+
+        let timer = Timer.scheduledTimer(
+            timeInterval: 1.0,
+            target: self,
+            selector: #selector(refresh),
+            userInfo: nil,
+            repeats: true
+        )
+        timer.tolerance = 0.1
+        refreshTimer = timer
+    }
+
+    private func stopPolling() {
+        refreshTimer?.invalidate()
+        refreshTimer = nil
     }
 
     func menuWillOpen(_ menu: NSMenu) {
@@ -226,6 +302,143 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return "\(Int(rounded))W"
         }
         return watts.formatted(.number.precision(.fractionLength(1))) + "W"
+    }
+
+    @objc private func checkForUpdatesManually() {
+        checkForUpdates(manual: true)
+    }
+
+    private func checkForUpdatesIfNeeded() {
+        guard
+            let lastCheck = UserDefaults.standard.object(forKey: lastUpdateCheckKey) as? Date,
+            Date().timeIntervalSince(lastCheck) < automaticUpdateCheckInterval
+        else {
+            checkForUpdates(manual: false)
+            return
+        }
+    }
+
+    private func checkForUpdates(manual: Bool) {
+        guard updateTask == nil else {
+            if manual {
+                showUpdateMessage(
+                    title: "Update check in progress",
+                    message: "Watt is it? is already checking for an update."
+                )
+            }
+            return
+        }
+
+        UserDefaults.standard.set(Date(), forKey: lastUpdateCheckKey)
+        let currentVersion = appVersion
+
+        updateTask = Task { [weak self] in
+            do {
+                let update = try await UpdateService.fetchLatestUpdate(currentVersion: currentVersion)
+                guard !Task.isCancelled else {
+                    return
+                }
+                self?.finishUpdateCheck(update, manual: manual)
+            } catch {
+                guard !Task.isCancelled else {
+                    return
+                }
+                self?.finishUpdateCheck(error: error, manual: manual)
+            }
+        }
+    }
+
+    private var appVersion: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.0.0"
+    }
+
+    private func finishUpdateCheck(_ update: AppUpdate?, manual: Bool) {
+        updateTask = nil
+
+        guard let update else {
+            if manual {
+                showUpdateMessage(
+                    title: "You’re up to date",
+                    message: "Watt is it? \(appVersion) is the latest published release."
+                )
+            }
+            return
+        }
+
+        let alert = NSAlert()
+        alert.messageText = "Watt is it? \(update.version) is available"
+        alert.informativeText = "You’re running \(appVersion). Download the latest release and restart Watt is it? to install it."
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "Download & Install")
+        alert.addButton(withTitle: "Later")
+        NSApp.activate(ignoringOtherApps: true)
+
+        if alert.runModal() == .alertFirstButtonReturn {
+            downloadAndInstall(update)
+        }
+    }
+
+    private func finishUpdateCheck(error: Error, manual: Bool) {
+        updateTask = nil
+        guard manual else {
+            return
+        }
+
+        showUpdateMessage(
+            title: "Update check failed",
+            message: error.localizedDescription
+        )
+    }
+
+    private func downloadAndInstall(_ update: AppUpdate) {
+        let currentAppURL = Bundle.main.bundleURL
+
+        updateTask = Task { [weak self] in
+            do {
+                let downloadedDMG = try await UpdateService.downloadDMG(for: update)
+                try await Task.detached(priority: .userInitiated) {
+                    try UpdateInstaller.prepareInstallation(
+                        dmgURL: downloadedDMG,
+                        replacing: currentAppURL
+                    )
+                }.value
+
+                guard !Task.isCancelled else {
+                    return
+                }
+
+                self?.finishSuccessfulInstallation()
+            } catch {
+                guard !Task.isCancelled else {
+                    return
+                }
+
+                self?.finishInstallation(error: error)
+            }
+        }
+    }
+
+    private func finishSuccessfulInstallation() {
+        updateTask = nil
+        NSApp.terminate(nil)
+    }
+
+    private func finishInstallation(error: Error) {
+        updateTask = nil
+        showUpdateMessage(
+            title: "Update could not be installed",
+            message: error.localizedDescription
+        )
+    }
+
+    private func showUpdateMessage(title: String, message: String) {
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = message
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "OK")
+        NSApp.activate(ignoringOtherApps: true)
+        alert.runModal()
     }
 
     @objc private func quit() {

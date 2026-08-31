@@ -1,7 +1,9 @@
 # Watt is it?
 
 <p align="center">
-  <img src="Reference/WattIsIt-AppIcon.png" width="128" alt="Watt is it? app icon">
+  <a href="./Reference/WattIsIt-AppIcon.png">
+    <img src="./Reference/WattIsIt-AppIcon.png" width="128" alt="Watt is it? battery app icon">
+  </a>
 </p>
 
 <p align="center">
@@ -17,7 +19,7 @@
 
 ## Download
 
-[Download Watt is it? for Apple silicon](https://github.com/shay2000/watt-is-it/releases/latest/download/WattIsIt-1.0.1-macOS-arm64.dmg)
+[Download Watt is it? for Apple silicon](https://github.com/shay2000/watt-is-it/releases/latest/download/WattIsIt-1.1.0-macOS-arm64.dmg)
 
 ## Quick start
 
@@ -35,7 +37,15 @@
 - Click for actual input, system draw, rated input, and charge surplus.
 - Native checkmarks for choosing which watt values appear in the menu bar.
 - Signed charge surplus, so negative values remain visible when system draw exceeds the adapter rating.
-- Local-only: no network access, analytics, or account required.
+- Polling pauses completely on battery and resumes when macOS reports a power-source change.
+- Built-in GitHub release updater with a native **Check for Updates…** menu item.
+- No telemetry or account; the only network request is the GitHub release check.
+
+## Updates
+
+Watt is it? checks the public GitHub releases once every 24 hours and also lets you check manually from the menu. When a newer Apple silicon DMG is available, choose **Download & Install** to validate, install, and relaunch the app automatically.
+
+Only published GitHub releases are installed; a commit pushed to `main` becomes an update after it is packaged and released.
 
 ## What the numbers mean
 
@@ -70,4 +80,4 @@ The app reads the `AppleSmartBattery` service provided by macOS through IOKit. O
 
 ## Release note
 
-The downloadable build is an arm64 macOS DMG containing the app and an Applications shortcut. It uses ad-hoc signing, so macOS may require the one-time Control-click → **Open** confirmation described above.
+The downloadable build is an arm64 macOS DMG containing the app and an Applications shortcut. It uses ad-hoc signing, so macOS may require the one-time Control-click → **Open** confirmation described above. Update downloads are also arm64 DMGs from the public GitHub releases page.
