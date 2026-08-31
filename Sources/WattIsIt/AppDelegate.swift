@@ -37,7 +37,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var snapshot = PowerSnapshot.unavailable
 
     private let lastUpdateCheckKey = "lastUpdateCheckDate"
-    private let automaticUpdateCheckInterval: TimeInterval = 24 * 60 * 60
+    private let automaticUpdateCheckInterval: TimeInterval = 7 * 24 * 60 * 60
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         UserDefaults.standard.register(defaults: [

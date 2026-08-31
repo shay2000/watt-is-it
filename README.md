@@ -19,7 +19,7 @@
 
 ## Download
 
-[Download Watt is it? for Apple silicon](https://github.com/shay2000/watt-is-it/releases/latest/download/WattIsIt-1.1.0-macOS-arm64.dmg)
+[Download Watt is it? for Apple silicon](https://github.com/shay2000/watt-is-it/releases/latest/download/WattIsIt-1.1.1-macOS-arm64.dmg)
 
 ## Quick start
 
@@ -43,7 +43,7 @@
 
 ## Updates
 
-Watt is it? checks the public GitHub releases once every 24 hours and also lets you check manually from the menu. When a newer Apple silicon DMG is available, choose **Download & Install** to validate, install, and relaunch the app automatically.
+Watt is it? checks the public GitHub releases once every 7 days and also lets you check manually from the menu. When a newer Apple silicon DMG is available, choose **Download & Install** to validate, install, and relaunch the app automatically.
 
 Only published GitHub releases are installed; a commit pushed to `main` becomes an update after it is packaged and released.
 
