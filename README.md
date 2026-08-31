@@ -17,13 +17,13 @@
 
 ## Download
 
-[Download Watt is it? for Apple silicon](https://github.com/shay2000/watt-is-it/releases/latest/download/WattIsIt-1.0.0-macOS-arm64.zip)
+[Download Watt is it? for Apple silicon](https://github.com/shay2000/watt-is-it/releases/latest/download/WattIsIt-1.0.1-macOS-arm64.dmg)
 
 ## Quick start
 
-1. Download and unzip the release above.
-2. Move `WattIsIt.app` to your Applications folder.
-3. Open it. If macOS shows a security warning, Control-click the app, choose **Open**, then confirm.
+1. Download and open the DMG above.
+2. Drag `WattIsIt.app` onto the **Applications** shortcut, then eject the disk image.
+3. Open it from Applications. If macOS shows a security warning, Control-click the app, choose **Open**, then confirm.
 4. Connect your Mac to power. The live watt number appears in the menu bar automatically.
 5. Click the number and use **Show in menu bar** to choose which watt values you want visible.
 
@@ -70,4 +70,4 @@ The app reads the `AppleSmartBattery` service provided by macOS through IOKit. O
 
 ## Release note
 
-The downloadable build is an arm64 macOS app bundle using ad-hoc signing. macOS may require the one-time Control-click → **Open** confirmation described above.
+The downloadable build is an arm64 macOS DMG containing the app and an Applications shortcut. It uses ad-hoc signing, so macOS may require the one-time Control-click → **Open** confirmation described above.
