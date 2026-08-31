@@ -34,6 +34,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var refreshTimer: Timer?
     private var powerSourceRunLoopSource: CFRunLoopSource?
     private var updateTask: Task<Void, Never>?
+    private var updateStatusItem: NSStatusItem?
+    private var updateSpinner: NSProgressIndicator?
+    private var isUpdateActive = false
     private var successMessageTimer: Timer?
     private var updateMessageItem: NSMenuItem!
     private var versionItem: NSMenuItem!
@@ -54,6 +57,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         NSApp.setActivationPolicy(.accessory)
         configureStatusMenu()
         configurePowerSourceNotifications()
+        configureUpdateIndicator()
         showUpdateSuccessIfNeeded()
         refresh()
         checkForUpdatesIfNeeded()
@@ -64,8 +68,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         stopPowerSourceNotifications()
         updateTask?.cancel()
         successMessageTimer?.invalidate()
+        updateSpinner?.stopAnimation(nil)
         if let statusItem {
             NSStatusBar.system.removeStatusItem(statusItem)
+        }
+        if let updateStatusItem {
+            NSStatusBar.system.removeStatusItem(updateStatusItem)
         }
     }
 
@@ -109,6 +117,56 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func powerSourceDidChange() {
         // This is the only wake-up path after polling has stopped on battery.
         refresh()
+    }
+
+    private func configureUpdateIndicator() {
+        guard updateStatusItem == nil else {
+            return
+        }
+
+        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        let container = NSView(
+            frame: NSRect(
+                x: 0,
+                y: 0,
+                width: NSStatusItem.squareLength,
+                height: NSStatusItem.squareLength
+            )
+        )
+        container.toolTip = "Watt is it? — updating"
+
+        let spinner = NSProgressIndicator(frame: container.bounds.insetBy(dx: 2, dy: 2))
+        spinner.autoresizingMask = [.width, .height]
+        spinner.style = .spinning
+        spinner.controlSize = .small
+        spinner.isIndeterminate = true
+        spinner.isDisplayedWhenStopped = false
+        container.addSubview(spinner)
+
+        item.view = container
+        item.isVisible = false
+        updateStatusItem = item
+        updateSpinner = spinner
+    }
+
+    private func updateIndicatorVisibility() {
+        guard let updateStatusItem else {
+            return
+        }
+
+        let shouldShow = isUpdateActive && snapshot.externalConnected && statusItem != nil
+        if shouldShow {
+            updateStatusItem.isVisible = true
+            updateSpinner?.startAnimation(nil)
+        } else {
+            updateSpinner?.stopAnimation(nil)
+            updateStatusItem.isVisible = false
+        }
+    }
+
+    private func setUpdateActivity(_ active: Bool) {
+        isUpdateActive = active
+        updateIndicatorVisibility()
     }
 
     private func configureStatusMenu() {
@@ -179,6 +237,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func makeChangelogSubmenu() -> NSMenu {
         let menu = NSMenu(title: "Changelog")
         let entries: [(String, [String])] = [
+            (
+                "1.1.3",
+                [
+                    "Shows an animated loading indicator while an update downloads or installs."
+                ]
+            ),
             (
                 "1.1.2",
                 [
@@ -260,12 +324,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard snapshot.externalConnected else {
             stopPolling()
             removeStatusItemIfNeeded()
+            updateIndicatorVisibility()
             return
         }
 
         installStatusItemIfNeeded()
         renderStatusItem()
         updateStatusMenu()
+        updateIndicatorVisibility()
         startPollingIfNeeded()
     }
 
@@ -483,6 +549,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func downloadAndInstall(_ update: AppUpdate) {
         let currentAppURL = Bundle.main.bundleURL
         let pendingUpdateKey = pendingUpdateVersionKey
+        setUpdateActivity(true)
 
         updateTask = Task { [weak self] in
             do {
@@ -512,11 +579,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func finishSuccessfulInstallation() {
         updateTask = nil
+        setUpdateActivity(false)
         NSApp.terminate(nil)
     }
 
     private func finishInstallation(error: Error) {
         updateTask = nil
+        setUpdateActivity(false)
         showUpdateMessage(
             title: "Update could not be installed",
             message: error.localizedDescription

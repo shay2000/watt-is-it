@@ -19,7 +19,7 @@
 
 ## Download
 
-[Download Watt is it? for Apple silicon](https://github.com/shay2000/watt-is-it/releases/latest/download/WattIsIt-1.1.2-macOS-arm64.dmg)
+[Download Watt is it? for Apple silicon](https://github.com/shay2000/watt-is-it/releases/latest/download/WattIsIt-1.1.3-macOS-arm64.dmg)
 
 ## Quick start
 
@@ -39,6 +39,7 @@
 - Signed charge surplus, so negative values remain visible when system draw exceeds the adapter rating.
 - Polling pauses completely on battery and resumes when macOS reports a power-source change.
 - Built-in GitHub release updater with a native **Check for Updates…** menu item.
+- Animated update spinner appears to the left of the watt readout during downloads and installation.
 - No telemetry or account; the only network request is the GitHub release check.
 
 ## Updates
@@ -48,6 +49,10 @@ Watt is it? checks the public GitHub releases once every 7 days and also lets yo
 Only published GitHub releases are installed; a commit pushed to `main` becomes an update after it is packaged and released.
 
 ## Changelog
+
+### 1.1.3
+
+- Shows an animated loading indicator to the left of the watt readout while an update downloads or installs.
 
 ### 1.1.2
 
