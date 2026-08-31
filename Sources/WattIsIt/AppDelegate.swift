@@ -271,6 +271,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let menu = NSMenu(title: "Changelog")
         let entries: [(String, [String])] = [
             (
+                "1.1.6",
+                [
+                    "Fixes the menu-bar status item being hidden after upgrading from an older spinner layout."
+                ]
+            ),
+            (
                 "1.1.5",
                 [
                     "Keeps the update spinner inside the existing wattage status item.",
@@ -346,6 +352,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let newStatusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem = newStatusItem
         newStatusItem.menu = statusMenu
+        newStatusItem.autosaveName = "WattIsIt.mainStatusItem"
+        newStatusItem.isVisible = true
 
         guard let button = newStatusItem.button else {
             return

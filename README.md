@@ -19,7 +19,7 @@
 
 ## Download
 
-[Download Watt is it? for Apple silicon](https://github.com/shay2000/watt-is-it/releases/latest/download/WattIsIt-1.1.5-macOS-arm64.dmg)
+[Download Watt is it? for Apple silicon](https://github.com/shay2000/watt-is-it/releases/latest/download/WattIsIt-1.1.6-macOS-arm64.dmg)
 
 ## Quick start
 
@@ -77,6 +77,10 @@ The scheduler targets the next midnight in UTC. If the Mac is asleep or the app 
 During download and installation, an animated spinner appears to the left of the watt readout. The updater accepts only the app's Apple silicon DMG, checks its bundle identity and code signature, then relaunches Watt is it? from Applications. Open the installed app from Applications before using in-app updates; updates cannot replace an app running directly from a mounted DMG.
 
 ## Changelog
+
+### 1.1.6
+
+- Fixes the menu-bar status item being hidden after upgrading from a version that used a separate spinner item.
 
 ### 1.1.5
 
