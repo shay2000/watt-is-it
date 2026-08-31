@@ -34,9 +34,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var refreshTimer: Timer?
     private var powerSourceRunLoopSource: CFRunLoopSource?
     private var updateTask: Task<Void, Never>?
+    private var successMessageTimer: Timer?
+    private var updateMessageItem: NSMenuItem!
+    private var versionItem: NSMenuItem!
     private var snapshot = PowerSnapshot.unavailable
 
     private let lastUpdateCheckKey = "lastUpdateCheckDate"
+    private let pendingUpdateVersionKey = "pendingUpdateVersion"
     private let automaticUpdateCheckInterval: TimeInterval = 7 * 24 * 60 * 60
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -50,6 +54,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         NSApp.setActivationPolicy(.accessory)
         configureStatusMenu()
         configurePowerSourceNotifications()
+        showUpdateSuccessIfNeeded()
         refresh()
         checkForUpdatesIfNeeded()
     }
@@ -58,6 +63,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         stopPolling()
         stopPowerSourceNotifications()
         updateTask?.cancel()
+        successMessageTimer?.invalidate()
         if let statusItem {
             NSStatusBar.system.removeStatusItem(statusItem)
         }
@@ -146,6 +152,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
         updateItem.target = self
         statusMenu.addItem(updateItem)
+
+        let changelogItem = NSMenuItem(title: "Changelog", action: nil, keyEquivalent: "")
+        changelogItem.submenu = makeChangelogSubmenu()
+        statusMenu.addItem(changelogItem)
+        statusMenu.addItem(.separator())
+
+        updateMessageItem = disabledInfoItem(title: "")
+        updateMessageItem.isHidden = true
+        statusMenu.addItem(updateMessageItem)
+
+        versionItem = disabledInfoItem(title: "Version \(appVersion)")
+        statusMenu.addItem(versionItem)
         statusMenu.addItem(.separator())
 
         let quitItem = NSMenuItem(
@@ -156,6 +174,51 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         quitItem.target = self
         statusMenu.addItem(quitItem)
         updateDisplayMenu()
+    }
+
+    private func makeChangelogSubmenu() -> NSMenu {
+        let menu = NSMenu(title: "Changelog")
+        let entries: [(String, [String])] = [
+            (
+                "1.1.2",
+                [
+                    "Adds a version footer to the menu.",
+                    "Shows a temporary successful-update message after relaunch.",
+                    "Adds an in-app changelog."
+                ]
+            ),
+            (
+                "1.1.1",
+                [
+                    "Automatic release checks now run once every 7 days."
+                ]
+            ),
+            (
+                "1.1.0",
+                [
+                    "Stops polling while unplugged and resumes on power-source notifications.",
+                    "Adds automatic and manual GitHub release updates."
+                ]
+            )
+        ]
+
+        for (index, entry) in entries.enumerated() {
+            let versionHeader = NSMenuItem(title: entry.0, action: nil, keyEquivalent: "")
+            versionHeader.isEnabled = false
+            menu.addItem(versionHeader)
+
+            for change in entry.1 {
+                let changeItem = NSMenuItem(title: "• \(change)", action: nil, keyEquivalent: "")
+                changeItem.isEnabled = false
+                menu.addItem(changeItem)
+            }
+
+            if index < entries.count - 1 {
+                menu.addItem(.separator())
+            }
+        }
+
+        return menu
     }
 
     private func disabledInfoItem(title: String) -> NSMenuItem {
@@ -352,6 +415,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.0.0"
     }
 
+    private func showUpdateSuccessIfNeeded() {
+        guard let pendingVersion = UserDefaults.standard.string(forKey: pendingUpdateVersionKey) else {
+            return
+        }
+
+        UserDefaults.standard.removeObject(forKey: pendingUpdateVersionKey)
+        guard pendingVersion == appVersion else {
+            return
+        }
+
+        updateMessageItem.title = "Successfully updated to \(appVersion)"
+        updateMessageItem.isHidden = false
+        successMessageTimer?.invalidate()
+        successMessageTimer = Timer.scheduledTimer(
+            timeInterval: 10.0,
+            target: self,
+            selector: #selector(hideUpdateSuccess),
+            userInfo: nil,
+            repeats: false
+        )
+    }
+
+    @objc private func hideUpdateSuccess() {
+        updateMessageItem.isHidden = true
+        successMessageTimer = nil
+    }
+
     private func finishUpdateCheck(_ update: AppUpdate?, manual: Bool) {
         updateTask = nil
 
@@ -392,6 +482,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func downloadAndInstall(_ update: AppUpdate) {
         let currentAppURL = Bundle.main.bundleURL
+        let pendingUpdateKey = pendingUpdateVersionKey
 
         updateTask = Task { [weak self] in
             do {
@@ -407,6 +498,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     return
                 }
 
+                UserDefaults.standard.set(update.version, forKey: pendingUpdateKey)
                 self?.finishSuccessfulInstallation()
             } catch {
                 guard !Task.isCancelled else {
