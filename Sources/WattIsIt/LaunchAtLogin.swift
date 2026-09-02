@@ -1,4 +1,3 @@
-import Foundation
 import ServiceManagement
 
 // SMAppService.mainApp.register() succeeds only when the running bundle is in
@@ -10,12 +9,24 @@ enum LaunchAtLogin {
         SMAppService.mainApp.status == .enabled
     }
 
+    // Treat any OS-tracked registration as registered. In particular a
+    // .requiresApproval state must still be toggleable off from the UI,
+    // otherwise clicking would only re-register with no way to unregister.
+    static var isRegistered: Bool {
+        switch SMAppService.mainApp.status {
+        case .enabled, .requiresApproval:
+            return true
+        default:
+            return false
+        }
+    }
+
     static func setEnabled(_ enabled: Bool) throws {
         if enabled {
-            guard !isEnabled else { return }
+            guard !isRegistered else { return }
             _ = try SMAppService.mainApp.register()
         } else {
-            guard isEnabled else { return }
+            guard isRegistered else { return }
             _ = try SMAppService.mainApp.unregister()
         }
     }

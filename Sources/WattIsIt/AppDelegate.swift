@@ -500,7 +500,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func toggleStartAtLogin(_ sender: NSMenuItem) {
         do {
-            try LaunchAtLogin.setEnabled(!LaunchAtLogin.isEnabled)
+            try LaunchAtLogin.setEnabled(!LaunchAtLogin.isRegistered)
         } catch {
             showStartAtLoginError(error)
         }
