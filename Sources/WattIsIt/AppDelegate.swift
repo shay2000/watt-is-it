@@ -81,6 +81,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         stopPolling()
         stopPowerSourceNotifications()
+        PowerReader.releaseCachedService()
         automaticUpdateTimer?.invalidate()
         updateTask?.cancel()
         successMessageTimer?.invalidate()
@@ -272,6 +273,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let menu = NSMenu(title: "Changelog")
         let entries: [(String, [String])] = [
             (
+                "1.1.8",
+                [
+                    "Caches AppleSmartBattery lookups and avoids bridging unused registry data.",
+                    "Skips redundant menu-row updates while preserving one-second polling."
+                ]
+            ),
+            (
                 "1.1.7",
                 [
                     "Keeps the menu readouts updating while the menu is open.",
@@ -420,7 +428,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             userInfo: nil,
             repeats: true
         )
-        timer.tolerance = 0.1
+        timer.tolerance = 0.5
         // Menu tracking uses a separate run-loop mode; keep the same timer active there.
         RunLoop.main.add(timer, forMode: .default)
         RunLoop.main.add(timer, forMode: .eventTracking)
@@ -492,14 +500,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if button.title != composedTitle {
             button.title = composedTitle
         }
-        button.image = nil
+        if button.image != nil {
+            button.image = nil
+        }
     }
 
     private func updateStatusMenu() {
-        actualInputItem.title = "Actual input: \(wattageText(snapshot.powerWatts))"
-        systemDrawItem.title = "System draw: \(wattageText(snapshot.systemDrawWatts))"
-        chargeSurplusItem.title = "Charge surplus: \(wattageText(snapshot.chargeSurplusWatts))"
-        ratedInputItem.title = "Rated input: \(wattageText(snapshot.ratedInputWatts))"
+        let titles: [(item: NSMenuItem, title: String)] = [
+            (actualInputItem, "Actual input: \(wattageText(snapshot.powerWatts))"),
+            (systemDrawItem, "System draw: \(wattageText(snapshot.systemDrawWatts))"),
+            (chargeSurplusItem, "Charge surplus: \(wattageText(snapshot.chargeSurplusWatts))"),
+            (ratedInputItem, "Rated input: \(wattageText(snapshot.ratedInputWatts))")
+        ]
+
+        for (item, title) in titles where item.title != title {
+            item.title = title
+        }
     }
 
     private func updateDisplayMenu() {

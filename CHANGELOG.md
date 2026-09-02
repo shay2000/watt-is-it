@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.8 - 2026-09-02
+
+- Caches the AppleSmartBattery service handle between reads and retries cleanly if it becomes invalid.
+- Extracts only the required telemetry values without bridging the entire registry node into Swift dictionaries.
+- Skips redundant menu-row updates and increases timer tolerance while preserving one-second polling.
+
 ## 1.1.7 - 2026-09-02
 
 - Keeps the menu readouts updating while the menu is open.

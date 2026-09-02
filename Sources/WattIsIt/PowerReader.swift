@@ -2,10 +2,11 @@ import Foundation
 import IOKit
 
 enum PowerReader {
+    private static var cachedService: io_service_t = 0
+
     static func read() -> PowerSnapshot {
         let now = Date()
-        let properties = smartBatteryProperties()
-        guard !properties.isEmpty else {
+        guard let properties = smartBatteryProperties() else {
             return PowerSnapshot(
                 hasBattery: false,
                 externalConnected: false,
@@ -21,28 +22,28 @@ enum PowerReader {
             )
         }
 
-        let chargerData = dictionary(properties["ChargerData"])
-        let telemetry = dictionary(properties["PowerTelemetryData"])
-        let adapterDetails = dictionary(properties["AdapterDetails"])
-        let powerDistribution = dictionary(properties["PowerDistribution"])
+        let chargerData = dictionary(properties.object(forKey: "ChargerData"))
+        let telemetry = dictionary(properties.object(forKey: "PowerTelemetryData"))
+        let adapterDetails = dictionary(properties.object(forKey: "AdapterDetails"))
+        let powerDistribution = dictionary(properties.object(forKey: "PowerDistribution"))
 
-        let externalConnected = bool(properties["ExternalConnected"])
-            ?? bool(properties["AppleRawExternalConnected"])
+        let externalConnected = bool(properties.object(forKey: "ExternalConnected"))
+            ?? bool(properties.object(forKey: "AppleRawExternalConnected"))
             ?? false
-        let charging = bool(properties["IsCharging"])
-            ?? bool(chargerData["IsCharging"])
+        let charging = bool(properties.object(forKey: "IsCharging"))
+            ?? bool(chargerData?.object(forKey: "IsCharging"))
             ?? false
-        let fullyCharged = bool(properties["FullyCharged"]) ?? false
+        let fullyCharged = bool(properties.object(forKey: "FullyCharged")) ?? false
 
-        let capacity = number(properties["CurrentCapacity"])
-        let maximumCapacity = number(properties["MaxCapacity"])
+        let capacity = number(properties.object(forKey: "CurrentCapacity"))
+        let maximumCapacity = number(properties.object(forKey: "MaxCapacity"))
         let batteryPercent = percent(current: capacity, maximum: maximumCapacity)
 
         // SystemPowerIn is reported by macOS in milliwatts. It is the power
         // delivered by the adapter, rather than the battery's own current.
-        let telemetryPower = number(telemetry["SystemPowerIn"]).map { $0 / 1_000 }
-        let inputVoltage = number(telemetry["SystemVoltageIn"]).map { $0 / 1_000 }
-        let inputCurrent = number(telemetry["SystemCurrentIn"]).map { abs($0) / 1_000 }
+        let telemetryPower = number(telemetry?.object(forKey: "SystemPowerIn")).map { $0 / 1_000 }
+        let inputVoltage = number(telemetry?.object(forKey: "SystemVoltageIn")).map { $0 / 1_000 }
+        let inputCurrent = number(telemetry?.object(forKey: "SystemCurrentIn")).map { abs($0) / 1_000 }
         let calculatedInputPower = inputVoltage.flatMap { voltage in
             inputCurrent.map { voltage * $0 }
         }
@@ -50,7 +51,7 @@ enum PowerReader {
         // SystemLoad is reported by macOS in milliwatts. It represents the
         // Mac's current system draw, which lets the menu show the remaining
         // rated adapter headroom as a useful charging-surplus estimate.
-        let systemDrawWatts = number(telemetry["SystemLoad"])
+        let systemDrawWatts = number(telemetry?.object(forKey: "SystemLoad"))
             .flatMap { $0 > 0.1 ? $0 / 1_000 : nil }
 
         let powerWatts: Double?
@@ -62,9 +63,9 @@ enum PowerReader {
 
         // AdapterDetails.Watts is already in watts on current Macs. Older
         // systems expose the same rating through PowerDistribution in mW.
-        let ratedInputWatts = number(adapterDetails["Watts"])
-            ?? number(powerDistribution["IPDWattageOverride"]).map { $0 / 1_000 }
-            ?? number(powerDistribution["IPDInputPower"]).map { $0 / 1_000 }
+        let ratedInputWatts = number(adapterDetails?.object(forKey: "Watts"))
+            ?? number(powerDistribution?.object(forKey: "IPDWattageOverride")).map { $0 / 1_000 }
+            ?? number(powerDistribution?.object(forKey: "IPDInputPower")).map { $0 / 1_000 }
 
         let chargeSurplusWatts = ratedInputWatts.flatMap { rated in
             systemDrawWatts.map { rated - $0 }
@@ -85,20 +86,44 @@ enum PowerReader {
         )
     }
 
-    private static func smartBatteryProperties() -> [String: Any] {
+    private static func smartBatteryProperties() -> NSDictionary? {
+        if cachedService != 0 {
+            if let properties = registryProperties(for: cachedService) {
+                return properties
+            }
+            releaseCachedService()
+        }
+
         let matching = IOServiceMatching("AppleSmartBattery")
         var iterator: io_iterator_t = 0
         guard IOServiceGetMatchingServices(kIOMainPortDefault, matching, &iterator) == KERN_SUCCESS else {
-            return [:]
+            return nil
         }
         defer { IOObjectRelease(iterator) }
 
         let service = IOIteratorNext(iterator)
         guard service != 0 else {
-            return [:]
+            return nil
         }
-        defer { IOObjectRelease(service) }
 
+        cachedService = service
+        guard let properties = registryProperties(for: service) else {
+            releaseCachedService()
+            return nil
+        }
+        return properties
+    }
+
+    static func releaseCachedService() {
+        guard cachedService != 0 else {
+            return
+        }
+
+        IOObjectRelease(cachedService)
+        cachedService = 0
+    }
+
+    private static func registryProperties(for service: io_service_t) -> NSDictionary? {
         var unmanagedProperties: Unmanaged<CFMutableDictionary>?
         guard IORegistryEntryCreateCFProperties(
             service,
@@ -106,27 +131,22 @@ enum PowerReader {
             kCFAllocatorDefault,
             0
         ) == KERN_SUCCESS else {
-            return [:]
+            return nil
         }
 
         guard let unmanagedProperties else {
-            return [:]
+            return nil
         }
-        return (unmanagedProperties.takeRetainedValue() as? [String: Any]) ?? [:]
+
+        let properties = unmanagedProperties.takeRetainedValue() as NSDictionary
+        return properties.count > 0 ? properties : nil
     }
 
-    private static func dictionary(_ value: Any?) -> [String: Any] {
-        if let dictionary = value as? [String: Any] {
+    private static func dictionary(_ value: Any?) -> NSDictionary? {
+        if let dictionary = value as? NSDictionary {
             return dictionary
         }
-        if let dictionary = value as? NSDictionary {
-            return dictionary.reduce(into: [String: Any]()) { partialResult, element in
-                if let key = element.key as? String {
-                    partialResult[key] = element.value
-                }
-            }
-        }
-        return [:]
+        return nil
     }
 
     private static func bool(_ value: Any?) -> Bool? {
