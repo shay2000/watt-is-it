@@ -56,6 +56,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var updateMessageItem: NSMenuItem!
     private var versionItem: NSMenuItem!
     private var snapshot = PowerSnapshot.unavailable
+    private var isMenuOpen = false
 
     private let lastUpdateCheckKey = "lastUpdateCheckDate"
     private let pendingUpdateVersionKey = "pendingUpdateVersion"
@@ -388,7 +389,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         installStatusItemIfNeeded()
         renderStatusItem()
-        updateStatusMenu()
+        if isMenuOpen {
+            updateStatusMenu()
+        }
         updateIndicatorVisibility()
         startPollingIfNeeded()
     }
@@ -398,7 +401,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return
         }
 
-        let timer = Timer.scheduledTimer(
+        let timer = Timer(
             timeInterval: 1.0,
             target: self,
             selector: #selector(refresh),
@@ -406,6 +409,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             repeats: true
         )
         timer.tolerance = 0.1
+        // Menu tracking uses a separate run-loop mode; keep the same timer active there.
+        RunLoop.main.add(timer, forMode: .default)
+        RunLoop.main.add(timer, forMode: .eventTracking)
         refreshTimer = timer
     }
 
@@ -415,10 +421,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func menuWillOpen(_ menu: NSMenu) {
+        isMenuOpen = true
         refresh()
         updateStatusMenu()
         updateDisplayMenu()
         updateAutomaticUpdateMenu()
+    }
+
+    func menuDidClose(_ menu: NSMenu) {
+        isMenuOpen = false
     }
 
     @objc private func toggleDisplayValue(_ sender: NSMenuItem) {
@@ -465,7 +476,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // The status item is intentionally numbers-only. If every optional
         // value is unchecked, retain actual input as the safe fallback.
         let title = values.isEmpty ? wattageText(snapshot.powerWatts) : values.joined(separator: "  ")
-        button.title = isUpdateActive ? "    \(title)" : title
+        let composedTitle = isUpdateActive ? "    \(title)" : title
+        if button.title != composedTitle {
+            button.title = composedTitle
+        }
         button.image = nil
     }
 
@@ -593,18 +607,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return
         }
 
-        UserDefaults.standard.set(Date(), forKey: lastUpdateCheckKey)
         let currentVersion = appVersion
 
         updateTask = Task { [weak self] in
             do {
                 let update = try await UpdateService.fetchLatestUpdate(currentVersion: currentVersion)
                 guard !Task.isCancelled else {
+                    self?.updateTask = nil
                     return
                 }
                 self?.finishUpdateCheck(update, manual: manual)
             } catch {
                 guard !Task.isCancelled else {
+                    self?.updateTask = nil
                     return
                 }
                 self?.finishUpdateCheck(error: error, manual: manual)
@@ -645,6 +660,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func finishUpdateCheck(_ update: AppUpdate?, manual: Bool) {
         updateTask = nil
+        UserDefaults.standard.set(Date(), forKey: lastUpdateCheckKey)
 
         guard let update else {
             if manual {
@@ -697,6 +713,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 }.value
 
                 guard !Task.isCancelled else {
+                    self?.updateTask = nil
+                    self?.setUpdateActivity(false)
                     return
                 }
 
@@ -704,6 +722,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 self?.finishSuccessfulInstallation()
             } catch {
                 guard !Task.isCancelled else {
+                    self?.updateTask = nil
+                    self?.setUpdateActivity(false)
                     return
                 }
 

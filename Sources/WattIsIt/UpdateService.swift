@@ -15,6 +15,7 @@ enum UpdateService {
 
     static func fetchLatestUpdate(currentVersion: String) async throws -> AppUpdate? {
         var request = URLRequest(url: latestReleaseURL)
+        request.timeoutInterval = 15
         request.setValue("WattIsIt/\(currentVersion)", forHTTPHeaderField: "User-Agent")
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         request.setValue("2022-11-28", forHTTPHeaderField: "X-GitHub-Api-Version")
@@ -43,7 +44,9 @@ enum UpdateService {
     }
 
     static func downloadDMG(for update: AppUpdate) async throws -> URL {
-        let (temporaryURL, response) = try await URLSession.shared.download(from: update.downloadURL)
+        var request = URLRequest(url: update.downloadURL)
+        request.timeoutInterval = 60
+        let (temporaryURL, response) = try await URLSession.shared.download(for: request)
         try validate(response)
 
         let destination = FileManager.default.temporaryDirectory
@@ -306,15 +309,29 @@ enum UpdateInstaller {
     @discardableResult
     private static func run(_ executablePath: String, arguments: [String]) throws -> String {
         let process = Process()
-        let output = Pipe()
         process.executableURL = URL(fileURLWithPath: executablePath)
         process.arguments = arguments
-        process.standardOutput = output
-        process.standardError = output
+
+        let outputURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("WattIsIt-output-\(UUID().uuidString).log")
+        FileManager.default.createFile(atPath: outputURL.path, contents: nil)
+        let outputHandle = try FileHandle(forWritingTo: outputURL)
+        var outputHandleClosed = false
+        defer {
+            if !outputHandleClosed {
+                try? outputHandle.close()
+            }
+            try? FileManager.default.removeItem(at: outputURL)
+        }
+        process.standardOutput = outputHandle
+        process.standardError = outputHandle
         try process.run()
         process.waitUntilExit()
 
-        let outputData = output.fileHandleForReading.readDataToEndOfFile()
+        try? outputHandle.close()
+        outputHandleClosed = true
+
+        let outputData = (try? Data(contentsOf: outputURL)) ?? Data()
         let outputText = String(data: outputData, encoding: .utf8) ?? ""
         guard process.terminationStatus == 0 else {
             throw UpdateError.installationCommandFailed(
