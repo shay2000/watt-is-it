@@ -54,6 +54,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var isUpdateActive = false
     private var successMessageTimer: Timer?
     private var updateMessageItem: NSMenuItem!
+    private var startAtLoginItem: NSMenuItem!
     private var versionItem: NSMenuItem!
     private var snapshot = PowerSnapshot.unavailable
     private var isMenuOpen = false
@@ -238,6 +239,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         updateMessageItem.isHidden = true
         statusMenu.addItem(updateMessageItem)
 
+        startAtLoginItem = NSMenuItem(
+            title: "Start at login",
+            action: #selector(toggleStartAtLogin(_:)),
+            keyEquivalent: ""
+        )
+        startAtLoginItem.target = self
+        statusMenu.addItem(startAtLoginItem)
+
         versionItem = disabledInfoItem(title: "Version \(appVersion)")
         statusMenu.addItem(versionItem)
         statusMenu.addItem(.separator())
@@ -250,6 +259,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         quitItem.target = self
         statusMenu.addItem(quitItem)
         updateDisplayMenu()
+        updateStartAtLoginMenu()
         updateAutomaticUpdateMenu()
     }
 
@@ -272,6 +282,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func makeChangelogSubmenu() -> NSMenu {
         let menu = NSMenu(title: "Changelog")
         let entries: [(String, [String])] = [
+            (
+                "1.1.9",
+                [
+                    "Adds a Start at login option so Watt is it? launches automatically when you log in."
+                ]
+            ),
             (
                 "1.1.8",
                 [
@@ -445,6 +461,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         refresh()
         updateStatusMenu()
         updateDisplayMenu()
+        updateStartAtLoginMenu()
         updateAutomaticUpdateMenu()
     }
 
@@ -479,6 +496,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         UserDefaults.standard.set(mode.rawValue, forKey: AutomaticUpdateMode.defaultsKey)
         updateAutomaticUpdateMenu()
         configureAutomaticUpdateChecking()
+    }
+
+    @objc private func toggleStartAtLogin(_ sender: NSMenuItem) {
+        do {
+            try LaunchAtLogin.setEnabled(!LaunchAtLogin.isRegistered)
+        } catch {
+            showStartAtLoginError(error)
+        }
+        updateStartAtLoginMenu()
+    }
+
+    private func updateStartAtLoginMenu() {
+        startAtLoginItem.state = LaunchAtLogin.isEnabled ? .on : .off
+    }
+
+    private func showStartAtLoginError(_ error: Error) {
+        let isInApplications = Bundle.main.bundleURL.path.hasPrefix("/Applications/")
+        let message: String
+        if isInApplications {
+            message = error.localizedDescription
+        } else {
+            message = "Move Watt is it? to your Applications folder and open it from there, then try again."
+        }
+
+        let alert = NSAlert()
+        alert.messageText = "Start at login could not be changed"
+        alert.informativeText = message
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "OK")
+        NSApp.activate(ignoringOtherApps: true)
+        alert.runModal()
     }
 
     private func renderStatusItem() {

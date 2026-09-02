@@ -27,9 +27,11 @@ mkdir -p "$MODULE_CACHE_DIR"
     -Xcc -fmodules-cache-path="$MODULE_CACHE_DIR" \
     -framework AppKit \
     -framework IOKit \
+    -framework ServiceManagement \
     "$ROOT_DIR/Sources/WattIsIt/AppDelegate.swift" \
     "$ROOT_DIR/Sources/WattIsIt/PowerReader.swift" \
     "$ROOT_DIR/Sources/WattIsIt/PowerSnapshot.swift" \
+    "$ROOT_DIR/Sources/WattIsIt/LaunchAtLogin.swift" \
     "$ROOT_DIR/Sources/WattIsIt/UpdateService.swift" \
     -o "$BUILD_DIR/$PRODUCT_NAME"
 
