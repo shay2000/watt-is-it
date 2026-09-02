@@ -16,7 +16,8 @@ let package = Package(
             path: "Sources/WattIsIt",
             linkerSettings: [
                 .linkedFramework("AppKit"),
-                .linkedFramework("IOKit")
+                .linkedFramework("IOKit"),
+                .linkedFramework("ServiceManagement")
             ]
         )
     ]

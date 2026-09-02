@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.9 - 2026-09-02
+
+- Adds a **Start at login** option in the menu so Watt is it? launches automatically when you log in.
+
 ## 1.1.8 - 2026-09-02
 
 - Caches the AppleSmartBattery service handle between reads and retries cleanly if it becomes invalid.

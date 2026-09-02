@@ -53,6 +53,7 @@ Watt is it? runs as a lightweight menu-bar app with no Dock window. It becomes v
 - Built-in GitHub release updater with a native **Check for Updates…** menu item.
 - Configurable automatic update checks, set to daily at midnight UTC by default or turned off.
 - Animated update spinner appears inside the watt status item, to the left of the watt readout during downloads and installation.
+- Optional **Start at login** launches Watt is it? automatically when you log in.
 - No telemetry or account; the only network request is the GitHub release check.
 
 ## Using the menu
@@ -65,6 +66,7 @@ Click the watt number to open the native macOS menu:
 - **Check for Updates…** starts an update check immediately.
 - **Automatic update checks** lets you choose **Daily at midnight UTC** or **Off**. Manual checks remain available either way.
 - **Changelog** shows the changes included in each app version.
+- **Start at login** toggles whether Watt is it? launches automatically when you log in.
 - The current version is shown at the bottom of the menu. After an update relaunches, a temporary success message confirms the new version.
 - **Quit Watt is it?** exits the menu-bar app.
 
