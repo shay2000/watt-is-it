@@ -1,0 +1,74 @@
+name: Release DMG
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-dmg:
+    name: Build and publish DMG
+    runs-on: macos-14
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build the app
+        run: ./build_app.sh
+
+      - name: Verify tag matches app version
+        run: |
+          tag_version="${GITHUB_REF_NAME#v}"
+          app_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' build/WattIsIt.app/Contents/Info.plist)"
+          if [[ "$tag_version" != "$app_version" ]]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match app version ${app_version}; refusing to release." >&2
+            exit 1
+          fi
+          echo "app_version=$app_version" >> "$GITHUB_ENV"
+
+      - name: Package the DMG
+        run: |
+          staging="$RUNNER_TEMP/dmg-staging"
+          mkdir -p "$staging" release
+          cp -R build/WattIsIt.app "$staging/WattIsIt.app"
+          ln -s /Applications "$staging/Applications"
+          hdiutil create \
+            -volname "Watt is it?" \
+            -srcfolder "$staging" \
+            -ov \
+            -format UDZO \
+            "release/WattIsIt-${app_version}-macOS-arm64.dmg"
+          hdiutil verify "release/WattIsIt-${app_version}-macOS-arm64.dmg"
+
+      - name: Extract changelog notes
+        run: |
+          awk -v ver="$app_version" '
+            /^## / {
+              if (seen) exit
+              if ($2 == ver) seen = 1
+            }
+            seen {
+              sub(/ - [0-9]{4}-[0-9]{2}-[0-9]{2}$/, "")
+              print
+            }
+          ' CHANGELOG.md > "$RUNNER_TEMP/release-notes.md"
+          if [[ ! -s "$RUNNER_TEMP/release-notes.md" ]]; then
+            echo "No CHANGELOG.md entry found for ${app_version}; refusing to release." >&2
+            exit 1
+          fi
+
+      - name: Create or update the GitHub release
+        run: |
+          dmg="release/WattIsIt-${app_version}-macOS-arm64.dmg"
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "$dmg" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "$dmg" \
+              --title "Watt is it? ${app_version}" \
+              --notes-file "$RUNNER_TEMP/release-notes.md"
+          fi
