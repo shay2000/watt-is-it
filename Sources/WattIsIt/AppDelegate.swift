@@ -401,7 +401,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return
         }
 
-        let timer = Timer.scheduledTimer(
+        let timer = Timer(
             timeInterval: 1.0,
             target: self,
             selector: #selector(refresh),
@@ -409,6 +409,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             repeats: true
         )
         timer.tolerance = 0.1
+        // Menu tracking uses a separate run-loop mode; keep the same timer active there.
+        RunLoop.main.add(timer, forMode: .default)
+        RunLoop.main.add(timer, forMode: .eventTracking)
         refreshTimer = timer
     }
 
