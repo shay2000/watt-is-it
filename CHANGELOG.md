@@ -1,7 +1,8 @@
 # Changelog
 
-## Unreleased
+## 1.1.7 - 2026-09-02
 
+- Keeps the menu readouts updating while the menu is open.
 - Avoids needless redraws of the menu-bar title when the displayed wattage has not changed.
 - Refreshes the closed-menu readouts only when the menu opens instead of on every one-second tick.
 - Adds explicit timeouts to the GitHub release check and DMG download requests.

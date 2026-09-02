@@ -272,6 +272,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let menu = NSMenu(title: "Changelog")
         let entries: [(String, [String])] = [
             (
+                "1.1.7",
+                [
+                    "Keeps the menu readouts updating while the menu is open.",
+                    "Avoids needless redraws of the menu-bar title when the displayed wattage has not changed.",
+                    "Refreshes the closed-menu readouts only when the menu opens instead of on every one-second tick.",
+                    "Adds explicit timeouts to the GitHub release check and DMG download requests.",
+                    "Marks the daily automatic update check only after it succeeds so a failed check can be retried.",
+                    "Clears in-progress update state when an update task is cancelled.",
+                    "Fixes a potential deadlock while capturing command output during update installation."
+                ]
+            ),
+            (
                 "1.1.6",
                 [
                     "Fixes the menu-bar status item being hidden after upgrading from an older spinner layout."
