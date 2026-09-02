@@ -56,6 +56,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var updateMessageItem: NSMenuItem!
     private var versionItem: NSMenuItem!
     private var snapshot = PowerSnapshot.unavailable
+    private var isMenuOpen = false
 
     private let lastUpdateCheckKey = "lastUpdateCheckDate"
     private let pendingUpdateVersionKey = "pendingUpdateVersion"
@@ -388,6 +389,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         installStatusItemIfNeeded()
         renderStatusItem()
+        if isMenuOpen {
+            updateStatusMenu()
+        }
         updateIndicatorVisibility()
         startPollingIfNeeded()
     }
@@ -414,10 +418,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func menuWillOpen(_ menu: NSMenu) {
+        isMenuOpen = true
         refresh()
         updateStatusMenu()
         updateDisplayMenu()
         updateAutomaticUpdateMenu()
+    }
+
+    func menuDidClose(_ menu: NSMenu) {
+        isMenuOpen = false
     }
 
     @objc private func toggleDisplayValue(_ sender: NSMenuItem) {

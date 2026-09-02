@@ -316,14 +316,20 @@ enum UpdateInstaller {
             .appendingPathComponent("WattIsIt-output-\(UUID().uuidString).log")
         FileManager.default.createFile(atPath: outputURL.path, contents: nil)
         let outputHandle = try FileHandle(forWritingTo: outputURL)
+        var outputHandleClosed = false
         defer {
-            try? outputHandle.close()
+            if !outputHandleClosed {
+                try? outputHandle.close()
+            }
             try? FileManager.default.removeItem(at: outputURL)
         }
         process.standardOutput = outputHandle
         process.standardError = outputHandle
         try process.run()
         process.waitUntilExit()
+
+        try? outputHandle.close()
+        outputHandleClosed = true
 
         let outputData = (try? Data(contentsOf: outputURL)) ?? Data()
         let outputText = String(data: outputData, encoding: .utf8) ?? ""
