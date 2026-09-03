@@ -29,7 +29,7 @@
 4. Connect your Mac to power. The live watt number appears in the menu bar automatically.
 5. Click the number and use **Show in menu bar** to choose which watt values you want visible.
 
-Watt is it? runs as a lightweight menu-bar app with no Dock window. It becomes visible beside the battery only when macOS reports an external power source. On battery, it removes its status item and pauses its one-second power polling to avoid unnecessary work.
+Watt is it? runs as a lightweight menu-bar app with no Dock window. While plugged in it shows the live watt number beside the battery; on battery it removes its status item and pauses its one-second power polling to avoid unnecessary work, unless **Show discharge rate on battery** is enabled.
 
 ## Example
 
@@ -49,7 +49,8 @@ Watt is it? runs as a lightweight menu-bar app with no Dock window. It becomes v
 - Click for actual input, system draw, rated input, and charge surplus.
 - Native checkmarks for choosing which watt values appear in the menu bar.
 - Signed charge surplus, so negative values remain visible when system draw exceeds the adapter rating.
-- Polling pauses completely on battery and resumes when macOS reports a power-source change.
+- By default, polling pauses completely on battery and resumes when macOS reports a power-source change.
+- Optional **Show discharge rate on battery** keeps Watt is it? open while unplugged, showing your Mac's current discharge rate at a low polling rate (uses a little extra battery).
 - Built-in GitHub release updater with a native **Check for Updates…** menu item.
 - Configurable automatic update checks, set to daily at midnight UTC by default or turned off.
 - Animated update spinner appears inside the watt status item, to the left of the watt readout during downloads and installation.
@@ -67,6 +68,7 @@ Click the watt number to open the native macOS menu:
 - **Automatic update checks** lets you choose **Daily at midnight UTC** or **Off**. Manual checks remain available either way.
 - **Changelog** shows the changes included in each app version.
 - **Start at login** toggles whether Watt is it? launches automatically when you log in.
+- **Show discharge rate on battery** keeps Watt is it? open while unplugged and shows the current discharge rate in the menu bar.
 - The current version is shown at the bottom of the menu. After an update relaunches, a temporary success message confirms the new version.
 - **Quit Watt is it?** exits the menu-bar app.
 

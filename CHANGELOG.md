@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.10 - 2026-09-03
+
+- Asks once whether to keep Watt is it? open on battery showing the current discharge rate, or hide it to save power.
+- Adds a **Show discharge rate on battery** option in the menu.
+
 ## 1.1.9 - 2026-09-02
 
 - Adds a **Start at login** option in the menu so Watt is it? launches automatically when you log in.
