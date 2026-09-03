@@ -55,12 +55,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var successMessageTimer: Timer?
     private var updateMessageItem: NSMenuItem!
     private var startAtLoginItem: NSMenuItem!
+    private var showDischargeOnBatteryItem: NSMenuItem!
     private var versionItem: NSMenuItem!
     private var snapshot = PowerSnapshot.unavailable
     private var isMenuOpen = false
 
     private let lastUpdateCheckKey = "lastUpdateCheckDate"
     private let pendingUpdateVersionKey = "pendingUpdateVersion"
+    private let showDischargeOnBatteryKey = "showDischargeOnBattery"
+    private let dischargeOnboardingShownKey = "dischargeOnboardingShown"
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         UserDefaults.standard.register(defaults: [
@@ -68,12 +71,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             DisplayValue.systemDraw.defaultsKey: false,
             DisplayValue.chargeSurplus.defaultsKey: false,
             DisplayValue.ratedInput.defaultsKey: false,
-            AutomaticUpdateMode.defaultsKey: AutomaticUpdateMode.daily.rawValue
+            AutomaticUpdateMode.defaultsKey: AutomaticUpdateMode.daily.rawValue,
+            showDischargeOnBatteryKey: false,
+            dischargeOnboardingShownKey: false
         ])
 
         NSApp.setActivationPolicy(.accessory)
         configureStatusMenu()
         configurePowerSourceNotifications()
+        presentDischargeOnboardingIfNeeded()
         showUpdateSuccessIfNeeded()
         refresh()
         configureAutomaticUpdateChecking()
@@ -247,6 +253,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         startAtLoginItem.target = self
         statusMenu.addItem(startAtLoginItem)
 
+        showDischargeOnBatteryItem = NSMenuItem(
+            title: "Show discharge rate on battery",
+            action: #selector(toggleShowDischargeOnBattery(_:)),
+            keyEquivalent: ""
+        )
+        showDischargeOnBatteryItem.target = self
+        statusMenu.addItem(showDischargeOnBatteryItem)
+
         versionItem = disabledInfoItem(title: "Version \(appVersion)")
         statusMenu.addItem(versionItem)
         statusMenu.addItem(.separator())
@@ -260,6 +274,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         statusMenu.addItem(quitItem)
         updateDisplayMenu()
         updateStartAtLoginMenu()
+        updateShowDischargeOnBatteryMenu()
         updateAutomaticUpdateMenu()
     }
 
@@ -282,6 +297,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func makeChangelogSubmenu() -> NSMenu {
         let menu = NSMenu(title: "Changelog")
         let entries: [(String, [String])] = [
+            (
+                "1.1.10",
+                [
+                    "Asks once whether to keep Watt is it? open on battery showing the current discharge rate, or hide it to save power.",
+                    "Adds a Show discharge rate on battery option in the menu."
+                ]
+            ),
             (
                 "1.1.9",
                 [
@@ -410,13 +432,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         self.statusItem = nil
     }
 
+    private var isBatteryMode: Bool {
+        !snapshot.externalConnected
+            && snapshot.hasBattery
+            && UserDefaults.standard.bool(forKey: showDischargeOnBatteryKey)
+    }
+
+    private var pollingInterval: TimeInterval {
+        isBatteryMode ? 5.0 : 1.0
+    }
+
+    private var batteryModeTitle: String {
+        guard let watts = snapshot.systemDrawWatts, watts > 0.1 else {
+            return "—W"
+        }
+        return "-" + wattageText(watts)
+    }
+
     @objc private func refresh() {
         snapshot = PowerReader.read()
 
-        // Keep the indicator absent until an adapter is connected, and stop
-        // the timer completely on battery. The IOKit power-source callback
-        // starts polling again when macOS reports a power-source change.
-        guard snapshot.externalConnected else {
+        // Keep the indicator absent until an adapter is connected (or
+        // battery-discharge mode is enabled), and stop the timer completely
+        // on battery otherwise. The IOKit power-source callback starts
+        // polling again when macOS reports a power-source change.
+        guard snapshot.externalConnected || isBatteryMode else {
             stopPolling()
             removeStatusItemIfNeeded()
             updateIndicatorVisibility()
@@ -433,18 +473,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func startPollingIfNeeded() {
-        guard refreshTimer == nil else {
+        let interval = pollingInterval
+        if let refreshTimer, abs(refreshTimer.timeInterval - interval) < 0.01 {
             return
         }
+        stopPolling()
 
         let timer = Timer(
-            timeInterval: 1.0,
+            timeInterval: interval,
             target: self,
             selector: #selector(refresh),
             userInfo: nil,
             repeats: true
         )
-        timer.tolerance = 0.5
+        timer.tolerance = interval == 1.0 ? 0.5 : 2.5
         // Menu tracking uses a separate run-loop mode; keep the same timer active there.
         RunLoop.main.add(timer, forMode: .default)
         RunLoop.main.add(timer, forMode: .eventTracking)
@@ -456,12 +498,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         refreshTimer = nil
     }
 
+    private func presentDischargeOnboardingIfNeeded() {
+        guard !UserDefaults.standard.bool(forKey: dischargeOnboardingShownKey) else {
+            return
+        }
+
+        // Mark the prompt as shown before presenting so that dismissing the
+        // alert never causes it to reappear on the next launch.
+        UserDefaults.standard.set(true, forKey: dischargeOnboardingShownKey)
+
+        let alert = NSAlert()
+        alert.messageText = "Show discharge rate on battery?"
+        alert.informativeText = "Watt is it? hides itself while your Mac is on battery to save power. It can instead stay open and show your Mac's current discharge rate in the menu bar.\n\nKeeping it open checks the battery every 5 seconds, which uses a little extra battery power. You can change this anytime from the menu."
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "Only while charging")
+        alert.addButton(withTitle: "Show discharge on battery")
+        NSApp.activate(ignoringOtherApps: true)
+
+        if alert.runModal() == .alertSecondButtonReturn {
+            UserDefaults.standard.set(true, forKey: showDischargeOnBatteryKey)
+        } else {
+            UserDefaults.standard.set(false, forKey: showDischargeOnBatteryKey)
+        }
+    }
+
     func menuWillOpen(_ menu: NSMenu) {
         isMenuOpen = true
         refresh()
         updateStatusMenu()
         updateDisplayMenu()
         updateStartAtLoginMenu()
+        updateShowDischargeOnBatteryMenu()
         updateAutomaticUpdateMenu()
     }
 
@@ -511,6 +578,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         startAtLoginItem.state = LaunchAtLogin.isEnabled ? .on : .off
     }
 
+    @objc private func toggleShowDischargeOnBattery(_ sender: NSMenuItem) {
+        UserDefaults.standard.set(
+            !UserDefaults.standard.bool(forKey: showDischargeOnBatteryKey),
+            forKey: showDischargeOnBatteryKey
+        )
+        updateShowDischargeOnBatteryMenu()
+        refresh()
+    }
+
+    private func updateShowDischargeOnBatteryMenu() {
+        showDischargeOnBatteryItem.state =
+            UserDefaults.standard.bool(forKey: showDischargeOnBatteryKey) ? .on : .off
+    }
+
     private func showStartAtLoginError(_ error: Error) {
         let isInApplications = Bundle.main.bundleURL.path.hasPrefix("/Applications/")
         let message: String
@@ -534,6 +615,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return
         }
 
+        if isBatteryMode {
+            let title = batteryModeTitle
+            if button.title != title {
+                button.title = title
+            }
+            button.toolTip = "Watt is it? — battery discharge"
+            if button.image != nil {
+                button.image = nil
+            }
+            return
+        }
+        button.toolTip = "Watt is it? — actual input"
+
         let values = DisplayValue.allCases.compactMap { value -> String? in
             guard UserDefaults.standard.bool(forKey: value.defaultsKey) else {
                 return nil
@@ -554,6 +648,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func updateStatusMenu() {
+        if isBatteryMode {
+            actualInputItem.isHidden = true
+            chargeSurplusItem.isHidden = true
+            ratedInputItem.isHidden = true
+            systemDrawItem.isHidden = false
+            let title = "Discharge: \(batteryModeTitle)"
+            if systemDrawItem.title != title {
+                systemDrawItem.title = title
+            }
+            return
+        }
+
+        actualInputItem.isHidden = false
+        systemDrawItem.isHidden = false
+        chargeSurplusItem.isHidden = false
+        ratedInputItem.isHidden = false
+
         let titles: [(item: NSMenuItem, title: String)] = [
             (actualInputItem, "Actual input: \(wattageText(snapshot.powerWatts))"),
             (systemDrawItem, "System draw: \(wattageText(snapshot.systemDrawWatts))"),
