@@ -25,7 +25,7 @@
 
 1. Download and open the DMG above.
 2. Drag `WattIsIt.app` onto the **Applications** shortcut, then eject the disk image.
-3. Open it from Applications. If macOS shows a security warning, Control-click the app, choose **Open**, then confirm.
+3. Open it from Applications. The app is unsigned, so macOS will block the first launch: open System Settings → **Privacy & Security**, click **Open Anyway** next to Watt is it?, then confirm.
 4. Connect your Mac to power. The live watt number appears in the menu bar automatically.
 5. Click the number and use **Show in menu bar** to choose which watt values you want visible.
 
@@ -134,7 +134,7 @@ Watt is it? reads the `AppleSmartBattery` service exposed by macOS through IOKit
 
 There is no account, analytics, telemetry, or background service. The app makes a network request only when checking the public GitHub releases API and downloads an update only after you choose **Download & Install**.
 
-Release DMGs are ad-hoc signed for a simple open-source distribution workflow. macOS may show a one-time Gatekeeper warning; use Control-click → **Open** as described in Quick start.
+Releases are unsigned, so macOS shows a one-time warning before the first launch. Approve it in System Settings → **Privacy & Security** → **Open Anyway**, or Control-click the app and choose **Open**, as described in Quick start.
 
 ## Requirements
 
@@ -158,4 +158,4 @@ The app reads the `AppleSmartBattery` service provided by macOS through IOKit. O
 
 ## Release note
 
-The downloadable build is an arm64 macOS DMG containing the app and an Applications shortcut. It uses ad-hoc signing, so macOS may require the one-time Control-click → **Open** confirmation described above. Update downloads are also arm64 DMGs from the public GitHub releases page.
+The downloadable build is an arm64 macOS DMG containing the app and an Applications shortcut. It is unsigned, so macOS may require the one-time authorization described above. Update downloads are also arm64 DMGs from the public GitHub releases page.
