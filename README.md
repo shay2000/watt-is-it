@@ -159,3 +159,13 @@ The app reads the `AppleSmartBattery` service provided by macOS through IOKit. O
 ## Release note
 
 The downloadable build is an arm64 macOS DMG containing the app and an Applications shortcut. It is unsigned, so macOS may require the one-time authorization described above. Update downloads are also arm64 DMGs from the public GitHub releases page.
+
+## Support Watt is it?
+
+If this project is useful to you, you can support its maintenance with a coffee:
+
+<p align="center">
+  <a href="https://buymeacoffee.com/shay2k">
+    <img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black" alt="Buy Me a Coffee"/>
+  </a>
+</p>
