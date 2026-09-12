@@ -1,5 +1,7 @@
 # Watt is it?
 
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/shay2k)
+
 <p align="center">
   <a href="./Reference/WattIsIt-AppIcon.png">
     <img src="./Reference/WattIsIt-AppIcon.png" width="128" alt="Watt is it? battery app icon">
