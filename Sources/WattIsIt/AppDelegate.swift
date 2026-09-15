@@ -324,6 +324,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let menu = NSMenu(title: "Changelog")
         let entries: [(String, [String])] = [
             (
+                "1.1.11",
+                [
+                    "Splits Show in menu bar into While plugged in and While on battery choices.",
+                    "Adds a Hide battery icon while plugged in option that removes the macOS battery icon while external power is connected.",
+                    "Unifies power-state wording across the menu and prompts."
+                ]
+            ),
+            (
                 "1.1.10",
                 [
                     "Asks once whether to keep Watt is it? open on battery showing the current discharge rate, or hide it to save power.",
