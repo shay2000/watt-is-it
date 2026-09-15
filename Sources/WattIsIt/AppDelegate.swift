@@ -55,7 +55,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var successMessageTimer: Timer?
     private var updateMessageItem: NSMenuItem!
     private var startAtLoginItem: NSMenuItem!
-    private var showDischargeOnBatteryItem: NSMenuItem!
+    private var dischargeRateItem: NSMenuItem!
+    private var hideBatteryIconItem: NSMenuItem!
     private var versionItem: NSMenuItem!
     private var snapshot = PowerSnapshot.unavailable
     private var isMenuOpen = false
@@ -64,6 +65,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let pendingUpdateVersionKey = "pendingUpdateVersion"
     private let showDischargeOnBatteryKey = "showDischargeOnBattery"
     private let dischargeOnboardingShownKey = "dischargeOnboardingShown"
+    private let hideBatteryIconWhilePluggedInKey = "hideBatteryIconWhilePluggedIn"
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         UserDefaults.standard.register(defaults: [
@@ -73,7 +75,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             DisplayValue.ratedInput.defaultsKey: false,
             AutomaticUpdateMode.defaultsKey: AutomaticUpdateMode.daily.rawValue,
             showDischargeOnBatteryKey: false,
-            dischargeOnboardingShownKey: false
+            dischargeOnboardingShownKey: false,
+            hideBatteryIconWhilePluggedInKey: false
         ])
 
         NSApp.setActivationPolicy(.accessory)
@@ -93,6 +96,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         updateTask?.cancel()
         successMessageTimer?.invalidate()
         updateSpinner?.stopAnimation(nil)
+        // The hidden battery icon is only meant to last while the app runs.
+        if BatteryIconVisibility.isHiddenByApp {
+            BatteryIconVisibility.restore()
+        }
         if let statusItem {
             NSStatusBar.system.removeStatusItem(statusItem)
         }
@@ -203,6 +210,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         statusMenu.addItem(.separator())
 
         displaySubmenu = NSMenu(title: "Show in menu bar")
+
+        let pluggedInSubmenu = NSMenu(title: "While plugged in")
         for value in DisplayValue.allCases {
             let item = NSMenuItem(
                 title: value.title,
@@ -212,8 +221,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             item.target = self
             item.representedObject = value.rawValue
             displayItems[value] = item
-            displaySubmenu.addItem(item)
+            pluggedInSubmenu.addItem(item)
         }
+
+        let pluggedInItem = NSMenuItem(title: "While plugged in", action: nil, keyEquivalent: "")
+        pluggedInItem.submenu = pluggedInSubmenu
+        displaySubmenu.addItem(pluggedInItem)
+
+        let batterySubmenu = NSMenu(title: "While on battery")
+        dischargeRateItem = NSMenuItem(
+            title: "Discharge rate",
+            action: #selector(toggleShowDischargeOnBattery(_:)),
+            keyEquivalent: ""
+        )
+        dischargeRateItem.target = self
+        batterySubmenu.addItem(dischargeRateItem)
+
+        let batteryItem = NSMenuItem(title: "While on battery", action: nil, keyEquivalent: "")
+        batteryItem.submenu = batterySubmenu
+        displaySubmenu.addItem(batteryItem)
 
         let displayItem = NSMenuItem(title: "Show in menu bar", action: nil, keyEquivalent: "")
         displayItem.submenu = displaySubmenu
@@ -253,13 +279,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         startAtLoginItem.target = self
         statusMenu.addItem(startAtLoginItem)
 
-        showDischargeOnBatteryItem = NSMenuItem(
-            title: "Show discharge rate on battery",
-            action: #selector(toggleShowDischargeOnBattery(_:)),
+        hideBatteryIconItem = NSMenuItem(
+            title: "Hide battery icon while plugged in",
+            action: #selector(toggleHideBatteryIconWhilePluggedIn(_:)),
             keyEquivalent: ""
         )
-        showDischargeOnBatteryItem.target = self
-        statusMenu.addItem(showDischargeOnBatteryItem)
+        hideBatteryIconItem.target = self
+        statusMenu.addItem(hideBatteryIconItem)
 
         versionItem = disabledInfoItem(title: "Version \(appVersion)")
         statusMenu.addItem(versionItem)
@@ -274,7 +300,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         statusMenu.addItem(quitItem)
         updateDisplayMenu()
         updateStartAtLoginMenu()
-        updateShowDischargeOnBatteryMenu()
+        updateHideBatteryIconMenu()
         updateAutomaticUpdateMenu()
     }
 
@@ -297,6 +323,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func makeChangelogSubmenu() -> NSMenu {
         let menu = NSMenu(title: "Changelog")
         let entries: [(String, [String])] = [
+            (
+                "1.1.11",
+                [
+                    "Splits Show in menu bar into While plugged in and While on battery choices.",
+                    "Adds a Hide battery icon while plugged in option that removes the macOS battery icon while external power is connected.",
+                    "Unifies power-state wording across the menu and prompts."
+                ]
+            ),
             (
                 "1.1.10",
                 [
@@ -451,6 +485,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func refresh() {
         snapshot = PowerReader.read()
+        updateBatteryIconVisibility()
 
         // Keep the indicator absent until an adapter is connected (or
         // battery-discharge mode is enabled), and stop the timer completely
@@ -511,7 +546,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         alert.messageText = "Show discharge rate on battery?"
         alert.informativeText = "Watt is it? hides itself while your Mac is on battery to save power. It can instead stay open and show your Mac's current discharge rate in the menu bar.\n\nKeeping it open checks the battery every 5 seconds, which uses a little extra battery power. You can change this anytime from the menu."
         alert.alertStyle = .informational
-        alert.addButton(withTitle: "Only while charging")
+        alert.addButton(withTitle: "Only while plugged in")
         alert.addButton(withTitle: "Show discharge on battery")
         NSApp.activate(ignoringOtherApps: true)
 
@@ -528,7 +563,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         updateStatusMenu()
         updateDisplayMenu()
         updateStartAtLoginMenu()
-        updateShowDischargeOnBatteryMenu()
+        updateHideBatteryIconMenu()
         updateAutomaticUpdateMenu()
     }
 
@@ -583,13 +618,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             !UserDefaults.standard.bool(forKey: showDischargeOnBatteryKey),
             forKey: showDischargeOnBatteryKey
         )
-        updateShowDischargeOnBatteryMenu()
+        updateDisplayMenu()
         refresh()
     }
 
-    private func updateShowDischargeOnBatteryMenu() {
-        showDischargeOnBatteryItem.state =
-            UserDefaults.standard.bool(forKey: showDischargeOnBatteryKey) ? .on : .off
+    @objc private func toggleHideBatteryIconWhilePluggedIn(_ sender: NSMenuItem) {
+        UserDefaults.standard.set(
+            !UserDefaults.standard.bool(forKey: hideBatteryIconWhilePluggedInKey),
+            forKey: hideBatteryIconWhilePluggedInKey
+        )
+        updateHideBatteryIconMenu()
+        updateBatteryIconVisibility()
+    }
+
+    private func updateHideBatteryIconMenu() {
+        hideBatteryIconItem.state =
+            UserDefaults.standard.bool(forKey: hideBatteryIconWhilePluggedInKey) ? .on : .off
+    }
+
+    private var hideBatteryIconWhilePluggedIn: Bool {
+        UserDefaults.standard.bool(forKey: hideBatteryIconWhilePluggedInKey)
+    }
+
+    // Hides the macOS battery icon while the Mac is plugged in and
+    // brings it back on battery, when the option is off, or on quit. If the
+    // user hid the icon themselves, the app never touches it.
+    private func updateBatteryIconVisibility() {
+        let shouldHide = hideBatteryIconWhilePluggedIn
+            && snapshot.externalConnected
+            && snapshot.hasBattery
+
+        if shouldHide {
+            guard !BatteryIconVisibility.isHiddenByApp, BatteryIconVisibility.isSystemVisible else {
+                return
+            }
+            BatteryIconVisibility.hide()
+        } else if BatteryIconVisibility.isHiddenByApp {
+            BatteryIconVisibility.restore()
+        }
     }
 
     private func showStartAtLoginError(_ error: Error) {
@@ -682,6 +748,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         for value in DisplayValue.allCases {
             displayItems[value]?.state = UserDefaults.standard.bool(forKey: value.defaultsKey) ? .on : .off
         }
+        dischargeRateItem.state =
+            UserDefaults.standard.bool(forKey: showDischargeOnBatteryKey) ? .on : .off
     }
 
     private func displayText(for value: DisplayValue) -> String? {

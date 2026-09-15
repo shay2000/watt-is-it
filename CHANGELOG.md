@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.11 - 2026-09-15
+
+- Splits **Show in menu bar** into **While plugged in** and **While on battery** so each power source can show its own watt values.
+- Adds an experimental **Hide battery icon while plugged in** option that removes the macOS battery icon while external power is connected and restores it on battery, on quit, or when turned off.
+- Unifies power-state wording across the menu and the battery-discharge prompt.
+
 ## 1.1.10 - 2026-09-03
 
 - Asks once whether to keep Watt is it? open on battery showing the current discharge rate, or hide it to save power.

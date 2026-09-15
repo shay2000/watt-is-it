@@ -29,9 +29,9 @@
 2. Drag `WattIsIt.app` onto the **Applications** shortcut, then eject the disk image.
 3. Open it from Applications. The app is unsigned, so macOS will block the first launch: open System Settings → **Privacy & Security**, click **Open Anyway** next to Watt is it?, then confirm.
 4. Connect your Mac to power. The live watt number appears in the menu bar automatically.
-5. Click the number and use **Show in menu bar** to choose which watt values you want visible.
+5. Click the number and use **Show in menu bar** to choose which watt values you want visible while plugged in and while on battery.
 
-Watt is it? runs as a lightweight menu-bar app with no Dock window. While plugged in it shows the live watt number beside the battery; on battery it removes its status item and pauses its one-second power polling to avoid unnecessary work, unless **Show discharge rate on battery** is enabled.
+Watt is it? runs as a lightweight menu-bar app with no Dock window. While plugged in it shows the live watt number beside the battery; on battery it removes its status item and pauses its one-second power polling to avoid unnecessary work, unless the **Discharge rate** option under **Show in menu bar → While on battery** is enabled.
 
 ## Example
 
@@ -47,13 +47,14 @@ Watt is it? runs as a lightweight menu-bar app with no Dock window. While plugge
 
 - Numbers-only menu-bar status item.
 - Menu-bar wattage keeps a constant width: values always show one decimal place, so the number does not jump between whole and decimal forms as it fluctuates.
-- Appears only while external power is connected.
+- Appears in the menu bar while your Mac is plugged in, and on battery only when the discharge rate is enabled.
 - Live actual input refreshed once per second.
 - Click for actual input, system draw, rated input, and charge surplus.
-- Native checkmarks for choosing which watt values appear in the menu bar.
+- Native checkmarks for choosing which watt values appear in the menu bar, with separate selections while plugged in and while on battery.
 - Signed charge surplus, so negative values remain visible when system draw exceeds the adapter rating.
 - By default, polling pauses completely on battery and resumes when macOS reports a power-source change.
-- Optional **Show discharge rate on battery** keeps Watt is it? open while unplugged, showing your Mac's current discharge rate at a low polling rate (uses a little extra battery).
+- Optional **Discharge rate** under **Show in menu bar → While on battery** keeps Watt is it? open on battery, showing your Mac's current discharge rate at a low polling rate (uses a little extra battery).
+- Optional **Hide battery icon while plugged in** removes the macOS battery icon from the menu bar while your Mac is plugged in and brings it back on battery, on quit, or when turned off.
 - Built-in GitHub release updater with a native **Check for Updates…** menu item.
 - Configurable automatic update checks, set to daily at midnight UTC by default or turned off.
 - Animated update spinner appears inside the watt status item, to the left of the watt readout during downloads and installation.
@@ -65,13 +66,14 @@ Watt is it? runs as a lightweight menu-bar app with no Dock window. While plugge
 Click the watt number to open the native macOS menu:
 
 - The live readouts show actual input, system draw, rated input, and charge surplus.
-- **Show in menu bar** contains native checkmarks for each available watt value. Actual input is enabled by default; additional values can be shown beside it.
+- **Show in menu bar** contains native checkmarks split into **While plugged in** and **While on battery**, so each power state can show its own watt values. Actual input is enabled by default while plugged in; additional values can be shown beside it.
 - If every value is unchecked, actual input remains visible as a safe fallback.
 - **Check for Updates…** starts an update check immediately.
 - **Automatic update checks** lets you choose **Daily at midnight UTC** or **Off**. Manual checks remain available either way.
 - **Changelog** shows the changes included in each app version.
 - **Start at login** toggles whether Watt is it? launches automatically when you log in.
-- **Show discharge rate on battery** keeps Watt is it? open while unplugged and shows the current discharge rate in the menu bar.
+- The **While on battery → Discharge rate** checkmark keeps Watt is it? open on battery and shows the current discharge rate in the menu bar.
+- **Hide battery icon while plugged in** removes the macOS battery icon from the menu bar while your Mac is plugged in, and restores it on battery or when Watt is it? quits.
 - The current version is shown at the bottom of the menu. After an update relaunches, a temporary success message confirms the new version.
 - **Quit Watt is it?** exits the menu-bar app.
 
@@ -128,7 +130,7 @@ The default status item shows only actual input, so it stays compact. Add the ot
 
 Watt is it? reads the `AppleSmartBattery` service exposed by macOS through IOKit. It uses the system's power telemetry when available and falls back to input voltage × input current for actual input on compatible hardware.
 
-- The menu-bar status item is hidden when no external power source is connected.
+- The menu-bar status item is hidden while on battery unless the discharge rate is enabled.
 - Power polling stops on battery and resumes when macOS sends a power-source notification.
 - If macOS does not expose an AppleSmartBattery service, the app stays hidden because there is no reliable wattage source to display.
 - Menu-bar readouts always show one decimal place so the number stays a constant width as it fluctuates; the click-through menu readouts round to whole watts when sufficiently close to an integer.
