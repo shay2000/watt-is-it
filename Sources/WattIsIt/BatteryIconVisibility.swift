@@ -55,10 +55,16 @@ enum BatteryIconVisibility {
         var restoreState: [String: Int] = [:]
         for candidate in candidates {
             restoreState[identifier(for: candidate)] = storedNumber(for: candidate) ?? absentValue
-            setNumber(candidate.isInteger ? hiddenModuleValue : 0, for: candidate)
         }
+
+        // Persist the recovery state before the first Control Center change
+        // so a crash mid-way still leaves the original values recoverable.
         UserDefaults.standard.set(restoreState, forKey: restoreStateKey)
         UserDefaults.standard.set(true, forKey: hiddenByAppKey)
+
+        for candidate in candidates {
+            setNumber(imposedNumber(for: candidate), for: candidate)
+        }
         applyChanges()
     }
 
@@ -72,6 +78,12 @@ enum BatteryIconVisibility {
             guard let raw = stored[identifier(for: candidate)] else {
                 continue
             }
+            // Leave the preference alone when its current value no longer
+            // matches the one hide() imposed; the user changed it in the
+            // meantime and that newer choice wins.
+            guard imposedNumber(for: candidate) == storedNumber(for: candidate) else {
+                continue
+            }
             let number = (raw as? NSNumber)?.intValue ?? absentValue
             if number == absentValue {
                 removeValue(for: candidate)
@@ -82,6 +94,10 @@ enum BatteryIconVisibility {
         UserDefaults.standard.removeObject(forKey: restoreStateKey)
         UserDefaults.standard.set(false, forKey: hiddenByAppKey)
         applyChanges()
+    }
+
+    private static func imposedNumber(for candidate: Candidate) -> Int {
+        candidate.isInteger ? hiddenModuleValue : 0
     }
 
     private static func identifier(for candidate: Candidate) -> String {
