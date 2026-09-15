@@ -446,7 +446,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard let watts = snapshot.systemDrawWatts, watts > 0.1 else {
             return "—W"
         }
-        return "-" + wattageText(watts)
+        return "-" + menuBarWattageText(watts)
     }
 
     @objc private func refresh() {
@@ -637,7 +637,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         // The status item is intentionally numbers-only. If every optional
         // value is unchecked, retain actual input as the safe fallback.
-        let title = values.isEmpty ? wattageText(snapshot.powerWatts) : values.joined(separator: "  ")
+        let fallbackTitle = snapshot.powerWatts.map(menuBarWattageText) ?? "—W"
+        let title = values.isEmpty ? fallbackTitle : values.joined(separator: "  ")
         let composedTitle = isUpdateActive ? "    \(title)" : title
         if button.title != composedTitle {
             button.title = composedTitle
@@ -686,14 +687,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func displayText(for value: DisplayValue) -> String? {
         switch value {
         case .actualInput:
-            return snapshot.powerWatts.map(wattageText)
+            return snapshot.powerWatts.map(menuBarWattageText)
         case .systemDraw:
-            return snapshot.systemDrawWatts.map(wattageText)
+            return snapshot.systemDrawWatts.map(menuBarWattageText)
         case .chargeSurplus:
-            return snapshot.chargeSurplusWatts.map(wattageText)
+            return snapshot.chargeSurplusWatts.map(menuBarWattageText)
         case .ratedInput:
-            return snapshot.ratedInputWatts.map(wattageText)
+            return snapshot.ratedInputWatts.map(menuBarWattageText)
         }
+    }
+
+    private func menuBarWattageText(_ watts: Double) -> String {
+        watts.formatted(.number.precision(.fractionLength(1))) + "W"
     }
 
     private func wattageText(_ watts: Double?) -> String {

@@ -46,6 +46,7 @@ Watt is it? runs as a lightweight menu-bar app with no Dock window. While plugge
 ## Features
 
 - Numbers-only menu-bar status item.
+- Menu-bar wattage keeps a constant width: values always show one decimal place, so the number does not jump between whole and decimal forms as it fluctuates.
 - Appears only while external power is connected.
 - Live actual input refreshed once per second.
 - Click for actual input, system draw, rated input, and charge surplus.
@@ -130,7 +131,7 @@ Watt is it? reads the `AppleSmartBattery` service exposed by macOS through IOKit
 - The menu-bar status item is hidden when no external power source is connected.
 - Power polling stops on battery and resumes when macOS sends a power-source notification.
 - If macOS does not expose an AppleSmartBattery service, the app stays hidden because there is no reliable wattage source to display.
-- Wattage values are rounded to whole watts when sufficiently close to an integer; otherwise one decimal place is shown.
+- Menu-bar readouts always show one decimal place so the number stays a constant width as it fluctuates; the click-through menu readouts round to whole watts when sufficiently close to an integer.
 
 ## Privacy and signing
 
